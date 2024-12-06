@@ -27,6 +27,8 @@ const CMD_TABLE: &[(&str, CmdHandler)] = &[
     ("pwd", do_pwd),
     ("rm", do_rm),
     ("uname", do_uname),
+    ("rename", do_rename),
+    ("mv", do_mv),
 ];
 
 fn file_type_to_char(ty: FileType) -> char {
@@ -270,6 +272,56 @@ fn do_help(_args: &str) {
 fn do_exit(_args: &str) {
     println!("Bye~");
     std::process::exit(0);
+}
+
+fn do_rename(args: &str) {
+    let (old_path, new_path) = split_whitespace(args);
+    if !(old_path.len() > 0 && new_path.len() > 0) {
+        print_err!("mv", "2 arguments required");
+    }
+    match fs::rename(old_path, new_path) {
+        Ok(_) => {}
+        Err(e) => {
+            print_err!("rename", format_args!("cannot rename '{old_path}' to '{new_path}'"), e);
+        }
+    }
+}
+
+fn do_mv(args: &str) {
+    let (src, dst) = split_whitespace(args);
+    if !(src.len() > 0 && dst.len() > 0) {
+        print_err!("mv", "2 arguments required");
+    }
+    match fs::metadata(dst) {
+        Ok(metadata) => {
+            if metadata.is_dir() {
+                let file_name = src.split('/').last().unwrap();
+                let dst_full_path = format!("{}/{}", dst, file_name);
+                match fs::read(src) {
+                    Ok(content) => match fs::write(&dst_full_path, content) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            print_err!("mv", format_args!("cannot move '{src}' to '{dst_full_path}'"), e);
+                        }
+                    },
+                    Err(e) => {
+                        print_err!("mv", format_args!("cannot read source file '{src}'"), e);
+                    }
+                }
+                match fs::remove_file(src) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        print_err!("mv", format_args!("cannot remove source file '{src}' after move"), e);
+                    }
+                }
+            } else {
+                print_err!("mv", format_args!("dst: '{dst}' is not a directory!"));
+            }
+        },
+        Err(e) => {
+            print_err!("mv", format_args!("destination path '{dst}' not found"), e);
+        }
+    }
 }
 
 pub fn run_cmd(line: &[u8]) {
